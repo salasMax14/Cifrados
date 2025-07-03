@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Cifrado Playfair Visual</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f0f0;
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .contenedor, .contenedor-historial {
+      display: none;
+      width: 100%;
+      max-width: 1200px;
+    }
+
+    .contenedor.activo {
+      display: flex !important;
+      flex-direction: row;
+      gap: 40px;
+      align-items: flex-start;
+    }
+
+    .contenedor-historial.activo {
+      display: block !important;
+    }
+
+    .formulario { flex: 1; }
+    .matriz-container { flex: 1; position: relative; margin-top: 20px; }
+
+    h1 { text-align: center; color: #333; }
+    .input-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input[type="text"] {
+      width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box;
+    }
+    button {
+      padding: 10px 15px; font-size: 16px; cursor: pointer;
+      margin-top: 10px; margin-right: 10px;
+    }
+
+    #matriz {
+      display: grid;
+      grid-template-columns: repeat(5, 50px);
+      gap: 5px;
+    }
+    .celda {
+      background: white; border: 2px solid #aaa; text-align: center;
+      font-weight: bold; font-size: 18px; line-height: 50px;
+      width: 50px; height: 50px;
+    }
+    .original { background-color: #00cc00 !important; color: white; }
+    .cifrada { background-color: #0066ff !important; color: white; }
+
+    #svgOverlay {
+      position: absolute; top: 0; left: 0; pointer-events: none;
+    }
+
+    rect { fill: none; stroke: red; stroke-width: 2px; }
+
+    #resultado, #paresTexto {
+      margin-top: 20px; font-weight: bold; font-size: 18px; color: #2a3f6c;
+    }
+    .paso { margin-top: 5px; font-weight: normal; font-size: 16px; }
+
+    .entrada {
+      background: #ffffff;
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+    }
+
+    pre {
+      background-color: #f0f0f0;
+      padding: 10px;
+      white-space: pre-wrap;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- VISTA PRINCIPAL -->
+  <div class="contenedor activo" id="vistaPrincipal">
+    <div class="formulario">
+      <h1>Cifrado Playfair (Visual)</h1>
+      <div class="input-group">
+        <label>Texto Original:</label>
+        <input type="text" id="textoOriginal" />
+      </div>
+      <div class="input-group">
+        <label>Clave:</label>
+        <input type="text" id="clave" />
+      </div>
+      <button onclick="cifrarAnimado()">Cifrar paso a paso</button>
+      <button id="btnLimpiar" onclick="reiniciarCifrado()" style="display:none;">Nuevo cifrado</button>
+      <button onclick="mostrarHistorial()">Ver historial completo</button>
+      <!-- Botón para volver al menú principal -->
+<button onclick="window.location.href='index.html'" style="background-color: #444; color: white; padding: 10px 20px; margin-top: 15px; border: none; border-radius: 5px;">
+  🔙 Volver al Menú Principal
+</button>
+
+      <div id="paresTexto"></div>
+      <div id="resultado"></div>
+    </div>
+    <div class="matriz-container">
+      <div id="matriz"></div>
+      <svg id="svgOverlay"></svg>
+    </div>
+  </div>
+
+  <!-- VISTA HISTORIAL -->
+  <div class="contenedor-historial" id="vistaHistorial">
+    <h1>Historial de Cifrados Playfair</h1>
+    <div id="historial"></div>
+    <button onclick="borrarHistorial()">Borrar historial</button>
+    <button onclick="volverInicio()">Volver al inicio</button>
+  </div>
+
+  <script>
+    let matriz = [];
+
+    function generarMatriz(clave) {
+      clave = clave.toUpperCase().replace(/[^A-Z]/g, "").replace(/J/g, "K");
+      let alfabeto = "ABCDEFGHIKLMNOPQRSTUVWXYZ";
+      let matrizFinal = [], usado = new Set();
+      for (let letra of clave + alfabeto) {
+        if (letra === "J") letra = "K";
+        if (!usado.has(letra)) {
+          matrizFinal.push(letra);
+          usado.add(letra);
+        }
+      }
+      return matrizFinal.slice(0, 25);
+    }
+
+    function dibujarMatriz(matrizPlano) {
+      const matrizHTML = document.getElementById("matriz");
+      matrizHTML.innerHTML = "";
+      matrizPlano.forEach((letra, i) => {
+        let celda = document.createElement("div");
+        celda.className = "celda";
+        celda.id = "celda-" + i;
+        celda.textContent = letra === "K" ? "J/K" : letra;
+        matrizHTML.appendChild(celda);
+      });
+    }
+
+    function prepararTexto(texto) {
+      texto = texto.toUpperCase().replace(/[^A-Z]/g, "").replace(/J/g, "K");
+      let pares = [];
+      for (let i = 0; i < texto.length; i += 2) {
+        let a = texto[i], b = texto[i + 1] || "X";
+        if (a === b) { b = "X"; i--; }
+        pares.push([a, b]);
+      }
+      return pares;
+    }
+
+    function mostrarPares(pares) {
+      document.getElementById("paresTexto").innerHTML = "Pares del texto original: " + pares.map(p => p.join("")).join(" ");
+    }
+
+    function buscarPosicion(letra) {
+      const idx = matriz.indexOf(letra);
+      return [Math.floor(idx / 5), idx % 5];
+    }
+
+    function cifrarPareja(par) {
+      let [f1, c1] = buscarPosicion(par[0]);
+      let [f2, c2] = buscarPosicion(par[1]);
+      if (f1 === f2) return { resultado: [matriz[f1 * 5 + (c1 + 1) % 5], matriz[f2 * 5 + (c2 + 1) % 5]], regla: "Misma fila" };
+      if (c1 === c2) return { resultado: [matriz[((f1 + 1) % 5) * 5 + c1], matriz[((f2 + 1) % 5) * 5 + c2]], regla: "Misma columna" };
+      return { resultado: [matriz[f1 * 5 + c2], matriz[f2 * 5 + c1]], regla: "Distinta fila y columna" };
+    }
+
+    function limpiarResaltado() {
+      for (let i = 0; i < 25; i++) {
+        document.getElementById("celda-" + i)?.classList.remove("original", "cifrada");
+      }
+      document.getElementById("svgOverlay").innerHTML = "";
+    }
+
+    function resaltarCeldas(originales, cifradas) {
+      limpiarResaltado();
+      originales.forEach(letra => document.getElementById("celda-" + matriz.indexOf(letra))?.classList.add("original"));
+      cifradas.forEach(letra => document.getElementById("celda-" + matriz.indexOf(letra))?.classList.add("cifrada"));
+      dibujarRectangulo(originales);
+    }
+
+    function dibujarRectangulo(letras) {
+      const svg = document.getElementById("svgOverlay");
+      svg.innerHTML = "";
+      let posiciones = letras.map(letra => {
+        const idx = matriz.indexOf(letra);
+        const celda = document.getElementById("celda-" + idx);
+        const rect = celda.getBoundingClientRect();
+        const contRect = document.getElementById("matriz").getBoundingClientRect();
+        return {
+          x: rect.left - contRect.left,
+          y: rect.top - contRect.top,
+          width: rect.width,
+          height: rect.height
+        };
+      });
+      const x1 = Math.min(posiciones[0].x, posiciones[1].x);
+      const y1 = Math.min(posiciones[0].y, posiciones[1].y);
+      const x2 = Math.max(posiciones[0].x + posiciones[0].width, posiciones[1].x + posiciones[1].width);
+      const y2 = Math.max(posiciones[0].y + posiciones[0].height, posiciones[1].y + posiciones[1].height);
+      const width = x2 - x1;
+      const height = y2 - y1;
+      svg.setAttribute("width", document.getElementById("matriz").offsetWidth);
+      svg.setAttribute("height", document.getElementById("matriz").offsetHeight);
+      svg.innerHTML = `<rect x="${x1}" y="${y1}" width="${width}" height="${height}" />`;
+    }
+
+    function cifrarAnimado() {
+      const texto = document.getElementById("textoOriginal").value;
+      const clave = document.getElementById("clave").value;
+      matriz = generarMatriz(clave);
+      dibujarMatriz(matriz);
+      const pares = prepararTexto(texto);
+      mostrarPares(pares);
+      let resultadoFinal = "", i = 0;
+      document.getElementById("resultado").innerHTML = "";
+
+      const paso = () => {
+        if (i >= pares.length) {
+          guardarEnHistorial(texto, clave, "Pares del texto original: " + pares.map(p => p.join("")) + "\n" + document.getElementById("resultado").innerText + "\nTexto Cifrado Final: " + resultadoFinal);
+          document.getElementById("textoOriginal").disabled = true;
+          document.getElementById("clave").disabled = true;
+          document.getElementById("btnLimpiar").style.display = "inline-block";
+
+          const final = document.createElement("div");
+          final.style.fontWeight = "bold";
+          final.style.marginTop = "15px";
+          final.innerText = "Texto Cifrado Final: " + resultadoFinal;
+          document.getElementById("resultado").appendChild(final);
+          return;
+        }
+        const par = pares[i];
+        const { resultado, regla } = cifrarPareja(par);
+        resultadoFinal += resultado.join("");
+        resaltarCeldas(par, resultado);
+        const infoPaso = document.createElement("div");
+        infoPaso.className = "paso";
+        infoPaso.innerHTML = `<strong>${par.join("")}</strong> → <strong>${resultado.join("")}</strong> (${regla})`;
+        document.getElementById("resultado").appendChild(infoPaso);
+        i++;
+        setTimeout(paso, 1500);
+      };
+      paso();
+    }
+
+    function guardarEnHistorial(texto, clave, detalle) {
+      let historial = JSON.parse(localStorage.getItem("historialPF") || "[]");
+      historial.unshift({ texto, clave, detalle });
+      localStorage.setItem("historialPF", JSON.stringify(historial));
+    }
+
+    function reiniciarCifrado() {
+      document.getElementById("textoOriginal").value = "";
+      document.getElementById("clave").value = "";
+      document.getElementById("textoOriginal").disabled = false;
+      document.getElementById("clave").disabled = false;
+      document.getElementById("paresTexto").innerHTML = "";
+      document.getElementById("resultado").innerHTML = "";
+      document.getElementById("btnLimpiar").style.display = "none";
+      dibujarMatriz([]);
+      limpiarResaltado();
+    }
+
+    function mostrarHistorial() {
+      document.getElementById("vistaPrincipal").classList.remove("activo");
+      document.getElementById("vistaHistorial").classList.add("activo");
+
+      const contenedor = document.getElementById("historial");
+      contenedor.innerHTML = "";
+      let historial = JSON.parse(localStorage.getItem("historialPF") || "[]");
+      if (historial.length === 0) {
+        contenedor.innerHTML = "<p>No hay historial guardado.</p>";
+      } else {
+        historial.forEach(item => {
+          const entrada = document.createElement("div");
+          entrada.className = "entrada";
+          entrada.innerHTML = `
+            <strong>Texto Original:</strong> ${item.texto}<br>
+            <strong>Clave:</strong> ${item.clave}<br>
+            <pre>${item.detalle}</pre>
+          `;
+          contenedor.appendChild(entrada);
+        });
+      }
+    }
+
+    function borrarHistorial() {
+      localStorage.removeItem("historialPF");
+      mostrarHistorial();
+    }
+
+    function volverInicio() {
+      document.getElementById("vistaHistorial").classList.remove("activo");
+      document.getElementById("vistaPrincipal").classList.add("activo");
+    }
+  </script>
+</body>
+</html>

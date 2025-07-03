@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Historial de Cifrados</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f4f4f4;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #2a3f6c;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background-color: #fff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #ccc;
+    }
+
+    th {
+      background-color: #2a3f6c;
+      color: white;
+    }
+
+    tr:hover {
+      background-color: #f1f1f1;
+    }
+
+    .volver {
+      display: block;
+      margin: 20px auto;
+      width: fit-content;
+      padding: 10px 20px;
+      background-color: #2a3f6c;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      text-decoration: none;
+      text-align: center;
+    }
+
+    .volver:hover {
+      background-color: #1f2f50;
+    }
+
+    .eliminar {
+      color: red;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .paginacion {
+      text-align: center;
+      margin-top: 15px;
+    }
+
+    .paginacion button {
+      margin: 0 5px;
+      padding: 5px 10px;
+      background-color: #2a3f6c;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .paginacion button:disabled {
+      background-color: #aaa;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📜 Historial de Cifrados</h1>
+
+  <table id="tablaHistorial">
+    <thead>
+      <tr>
+        <th>Texto Original</th>
+        <th>Clave</th>
+        <th>Texto Cifrado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="paginacion">
+    <button id="prev">Anterior</button>
+    <span id="infoPagina"></span>
+    <button id="next">Siguiente</button>
+  </div>
+
+  <a href="index.html" class="volver">⬅ Volver</a>
+
+  <script>
+    const historial = JSON.parse(localStorage.getItem("historialCifrados")) || [];
+    const tbody = document.querySelector("#tablaHistorial tbody");
+    const prevBtn = document.getElementById("prev");
+    const nextBtn = document.getElementById("next");
+    const infoPagina = document.getElementById("infoPagina");
+
+    let paginaActual = 1;
+    const registrosPorPagina = 10;  // Cambiado de 5 a 10
+    const totalPaginas = Math.ceil(historial.length / registrosPorPagina);
+
+    function mostrarPagina(pagina) {
+      tbody.innerHTML = "";
+
+      if (historial.length === 0) {
+        const fila = document.createElement("tr");
+        fila.innerHTML = "<td colspan='4'>No hay datos de historial.</td>";
+        tbody.appendChild(fila);
+        infoPagina.textContent = "";
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        return;
+      }
+
+      const inicio = (pagina - 1) * registrosPorPagina;
+      const fin = inicio + registrosPorPagina;
+      const registros = historial.slice(inicio, fin);
+
+      registros.forEach((item, index) => {
+        const fila = document.createElement("tr");
+        fila.innerHTML = `
+          <td>${item.original}</td>
+          <td>${item.clave}</td>
+          <td>${item.cifrado}</td>
+          <td class="eliminar" onclick="eliminar(${inicio + index})">✖</td>
+        `;
+        tbody.appendChild(fila);
+      });
+
+      infoPagina.textContent = `Página ${paginaActual} de ${totalPaginas}`;
+      prevBtn.disabled = paginaActual === 1;
+      nextBtn.disabled = paginaActual === totalPaginas;
+    }
+
+    prevBtn.addEventListener("click", () => {
+      if (paginaActual > 1) {
+        paginaActual--;
+        mostrarPagina(paginaActual);
+      }
+    });
+
+    nextBtn.addEventListener("click", () => {   
+      if (paginaActual < totalPaginas) {
+        paginaActual++;
+        mostrarPagina(paginaActual);
+      }
+    });
+
+    window.eliminar = function(index) {
+      historial.splice(index, 1);
+      localStorage.setItem("historialCifrados", JSON.stringify(historial));
+      // Si al eliminar se queda vacía la última página, retroceder una
+      if (paginaActual > 1 && (paginaActual - 1) * registrosPorPagina >= historial.length) {
+        paginaActual--;
+      }
+      mostrarPagina(paginaActual);
+    };
+
+    mostrarPagina(paginaActual);
+  </script>
+
+</body>
+</html>
+

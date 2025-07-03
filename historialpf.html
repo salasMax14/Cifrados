@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Historial Cifrado Playfair</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      padding: 30px;
+      background-color: #f8f8f8;
+    }
+    h1 {
+      text-align: center;
+      color: #2a3f6c;
+    }
+    .entrada {
+      background: #ffffff;
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+    }
+    pre {
+      background-color: #f0f0f0;
+      padding: 10px;
+      white-space: pre-wrap;
+      border-radius: 5px;
+    }
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Historial de Cifrados Playfair</h1>
+  <div id="historial"></div>
+  <button onclick="borrarHistorial()">Borrar historial</button>
+  <script>
+    const contenedor = document.getElementById("historial");
+    let historial = JSON.parse(localStorage.getItem("historialPF") || "[]");
+    if (historial.length === 0) {
+      contenedor.innerHTML = "<p>No hay historial guardado.</p>";
+    } else {
+      historial.forEach(item => {
+        const entrada = document.createElement("div");
+        entrada.className = "entrada";
+        entrada.innerHTML = `
+          <strong>Texto Original:</strong> ${item.texto}<br>
+          <strong>Clave:</strong> ${item.clave}<br>
+          <pre>${item.detalle}</pre>
+        `;
+        contenedor.appendChild(entrada);
+      });
+    }
+    function borrarHistorial() {
+      localStorage.removeItem("historialPF");
+      location.reload();
+    }
+  </script>
+</body>
+</html>

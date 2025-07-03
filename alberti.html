@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cifrado de Alberti </title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(#ececec, #ccc);
+      font-family: 'Segoe UI', sans-serif;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .container {
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 20px;
+      gap: 20px;
+    }
+    .panel {
+      text-align: center;
+      width: 400px;
+    }
+    textarea, input, button, select {
+      padding: 10px;
+      font-size: 16px;
+      margin: 5px 0;
+      width: 90%;
+      max-width: 100%;
+      border-radius: 5px;
+      border: 1px solid #888;
+    }
+    button {
+      background-color: #2a3f6c;
+      color: white;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #1f2f50;
+    }
+    .canvas-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #canvas {
+      background: white;
+      border-radius: 50%;
+      box-shadow: 0 0 15px rgba(0,0,0,0.3);
+    }
+    .side-buttons {
+      display: flex;
+      flex-direction: row;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    #btnSiguiente {
+      display: none;
+      margin-top: 15px;
+      padding: 12px 20px;
+      font-size: 16px;
+    }
+    .info {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #333;
+      font-style: italic;
+    }
+    .error {
+      margin-top: 5px;
+      color: red;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    #btnNuevoCifrado {
+      display: none;
+      margin-top: 10px;
+      background-color: #5cb85c;
+    }
+    #btnNuevoCifrado:hover {
+      background-color: #4cae4c;
+    }
+    #modalEditar {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background-color: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+    }
+    #modalContenido {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      width: 400px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="modalEditar">
+    <div id="modalContenido">
+      <h3>Editar Ruletas</h3>
+      <input id="nuevaExterior" placeholder="Nueva ruleta exterior" /><br />
+      <input id="nuevaInterior" placeholder="Nueva ruleta interior" /><br />
+      <div id="errorEdicion" class="error"></div>
+      <button onclick="guardarRuletas()">Guardar</button>
+      <button onclick="cerrarModalEditar()">Cancelar</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="panel">
+      <h1 style="color: #2a3f6c;">🔐 Cifrado de Alberti </h1>
+      <textarea id="mensaje" rows="2" placeholder="Escribe el mensaje aquí..."></textarea><br />
+      <input id="clave" placeholder="Clave (letra o palabra)" /><br />
+      <div id="opcionesLetraClave" style="display: none; margin-top: 10px;">
+        <label><strong>Modo de cifrado con letra clave:</strong></label><br />
+        <select id="modoLetraClave">
+          <option value="normal">Normal (fijo)</option>
+          <option value="clave-dinamica-derecha">Clave avanza una letra a la derecha</option>
+          <option value="clave-dinamica-izquierda">Clave retrocede una letra a la izquierda</option>
+        </select>
+      </div>
+      <select id="respetarEspacios">
+        <option value="true">Respetar espacios</option>
+        <option value="false">Omitir espacios</option>
+      </select><br />
+      <button onclick="confirmarCifrado()">Cifrar</button><br />
+      <textarea id="resultado" rows="2" readonly placeholder="Resultado del cifrado..."></textarea>
+      <div class="info" id="infoEspacios"></div>
+      <div class="error" id="errorValidacion"></div>
+      <button onclick="window.location.href='historial.html'">Ver Historial</button>
+      <button onclick="editarRuletas()">Editar Ruletas</button>
+      <button id="btnNuevoCifrado" onclick="reiniciarTodo()">🔄 Nuevo Cifrado</button>
+      <!-- Botón para volver al menú principal -->
+<button onclick="window.location.href='index.html'" style="background-color: #444; color: white; padding: 10px 20px; margin-top: 15px; border: none; border-radius: 5px;">
+  🔙 Volver al Menú Principal
+</button>
+
+    </div>
+    <div class="canvas-wrapper">
+      <canvas id="canvas" width="600" height="600"></canvas>
+      <div class="side-buttons">
+        <button onclick="usarAlfabetoAmericano()">Americano</button>
+        <button onclick="usarAlfabetoEspanol()">Español</button>
+      </div>
+      <button id="btnSiguiente" onclick="continuarProceso()">➡️ Siguiente letra</button>
+    </div>
+  </div>
+  <audio id="sonidoGiro" src="sonido.mp3" preload="auto" loop></audio>
+<script>
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const centroX = canvas.width / 2;
+  const centroY = canvas.height / 2;
+
+  let ruedaExterior = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let ruedaInterior = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let anguloActual = 0;
+
+  let mensaje = "";
+  let clave = "";
+  let claveExtendida = "";
+  let claveGeneradaFinal = "";
+  let respetarEspacios = true;
+  let resaltadasExterior = [];
+  let resaltadasInterior = [];
+  let resaltadasClave = [];
+
+  let resultadoCifrado = "";
+  let indexProceso = 0;
+  let claveDinamica = "";
+
+  function confirmarCifrado() {
+    document.getElementById("errorValidacion").innerText = "";
+    mensaje = document.getElementById("mensaje").value.toLowerCase();
+    clave = document.getElementById("clave").value.toLowerCase();
+    const seleccion = document.getElementById("respetarEspacios").value;
+    respetarEspacios = (seleccion === "true");
+    document.getElementById("infoEspacios").innerText = "Espacios " + (respetarEspacios ? "respetados" : "omitidos") + ".";
+
+    for (let c of mensaje) {
+      if (c !== ' ' && !ruedaInterior.includes(c)) {
+        document.getElementById("errorValidacion").innerText = `El carácter "${c}" no está en el alfabeto seleccionado.`;
+        return;
+      }
+    }
+
+    if (!clave || !clave.split('').every(c => ruedaInterior.includes(c))) {
+      document.getElementById("errorValidacion").innerText = "La clave debe estar en la rueda interior.";
+      return;
+    }
+
+    document.getElementById("mensaje").disabled = true;
+    document.getElementById("clave").disabled = true;
+    document.querySelector("button[onclick='confirmarCifrado()']").disabled = true;
+    document.querySelector("select#respetarEspacios").disabled = true;
+
+    document.getElementById("opcionesLetraClave").style.display = (clave.length === 1) ? "block" : "none";
+    document.getElementById("modoLetraClave").disabled = (clave.length !== 1);
+
+    claveDinamica = clave;
+    generarClaveExtendida();
+    resultadoCifrado = "";
+    indexProceso = 0;
+    claveGeneradaFinal = "";
+    procesarSiguiente();
+  }
+
+  function usarAlfabetoEspanol() {
+    ruedaExterior = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ0123456789";
+    ruedaInterior = "abcdefghijklmnñopqrstuvwxyz0123456789";
+    reiniciar();
+  }
+
+  function usarAlfabetoAmericano() {
+    ruedaExterior = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    ruedaInterior = "abcdefghijklmnopqrstuvwxyz0123456789";
+    reiniciar();
+  }
+
+  function reiniciar() {
+    anguloActual = 0;
+    mensaje = "";
+    clave = "";
+    claveExtendida = "";
+    claveDinamica = "";
+    claveGeneradaFinal = "";
+    resaltadasExterior = [];
+    resaltadasInterior = [];
+    resaltadasClave = [];
+    resultadoCifrado = "";
+    indexProceso = 0;
+
+    document.getElementById("mensaje").value = "";
+    document.getElementById("clave").value = "";
+    document.getElementById("resultado").value = "";
+    document.getElementById("infoEspacios").innerText = "";
+    document.getElementById("errorValidacion").innerText = "";
+    document.getElementById("btnSiguiente").style.display = "none";
+    document.getElementById("btnNuevoCifrado").style.display = "none";
+    document.getElementById("opcionesLetraClave").style.display = "none";
+
+    document.getElementById("mensaje").disabled = false;
+    document.getElementById("clave").disabled = false;
+    document.getElementById("modoLetraClave").disabled = false;
+    document.querySelector("button[onclick='confirmarCifrado()']").disabled = false;
+    document.querySelector("select#respetarEspacios").disabled = false;
+
+    dibujarRuedas();
+  }
+
+  function dibujarRuedas() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const radioExterior = 240;
+    const radioInterior = 180;
+
+    for (let i = 0; i < ruedaExterior.length; i++) {
+      const ang = (2 * Math.PI / ruedaExterior.length) * i - Math.PI / 2;
+      const x = centroX + Math.cos(ang) * radioExterior;
+      const y = centroY + Math.sin(ang) * radioExterior;
+      const letra = ruedaExterior[i];
+      const resaltada = resaltadasExterior.includes(letra);
+      if (resaltada) dibujarCirculo(x, y, 18, "blue");
+      dibujarLetra(letra, x, y, resaltada ? "white" : "black", "bold 18px monospace");
+    }
+
+    for (let i = 0; i < ruedaInterior.length; i++) {
+      const ang = (2 * Math.PI / ruedaInterior.length) * i + (anguloActual * Math.PI / 180) - Math.PI / 2;
+      const x = centroX + Math.cos(ang) * radioInterior;
+      const y = centroY + Math.sin(ang) * radioInterior;
+      const letra = ruedaInterior[i];
+      const esVerde = resaltadasInterior.includes(letra);
+      const esClave = resaltadasClave.includes(letra);
+      if (esClave) {
+        dibujarCirculo(x, y, 18, "orange");
+        dibujarLetra(letra, x, y, "white", "bold 18px monospace");
+      } else if (esVerde) {
+        dibujarCirculo(x, y, 18, "green");
+        dibujarLetra(letra, x, y, "white", "bold 18px monospace");
+      } else {
+        dibujarLetra(letra, x, y, "red", "bold 18px monospace");
+      }
+    }
+
+    ctx.strokeStyle = "#aaa";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(centroX, centroY, radioExterior, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(centroX, centroY, radioInterior, 0, 2 * Math.PI);
+    ctx.stroke();
+  }
+
+  function dibujarLetra(letra, x, y, color, fuente) {
+    ctx.fillStyle = color;
+    ctx.font = fuente;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(letra, x, y);
+  }
+
+  function dibujarCirculo(x, y, r, color) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  function generarClaveExtendida() {
+    let mensajeSinEspacios = mensaje.replace(/ /g, '');
+    claveExtendida = '';
+    for (let i = 0; i < mensajeSinEspacios.length; i++) {
+      claveExtendida += clave[i % clave.length];
+    }
+  }
+
+  function avanzarClave(letra, direccion) {
+    let idx = ruedaInterior.indexOf(letra);
+    if (direccion === "derecha") {
+      return ruedaInterior[(idx + 1) % ruedaInterior.length];
+    } else {
+      return ruedaInterior[(idx - 1 + ruedaInterior.length) % ruedaInterior.length];
+    }
+  }
+
+  function procesarSiguiente() {
+    if (indexProceso >= mensaje.length) {
+      document.getElementById("resultado").value = resultadoCifrado;
+      document.getElementById("btnSiguiente").style.display = "none";
+      document.getElementById("btnNuevoCifrado").style.display = "inline-block";
+      document.getElementById("modoLetraClave").disabled = true;
+
+      const historial = JSON.parse(localStorage.getItem("historialCifrados")) || [];
+      historial.push({
+        original: mensaje,
+        clave: claveGeneradaFinal || claveExtendida || clave,
+        cifrado: resultadoCifrado
+      });
+      localStorage.setItem("historialCifrados", JSON.stringify(historial));
+
+      resaltadasInterior = [];
+      resaltadasExterior = [];
+      resaltadasClave = [];
+      dibujarRuedas();
+      return;
+    }
+
+    const letra = mensaje[indexProceso];
+    if (letra === ' ' && !respetarEspacios) {
+      indexProceso++;
+      procesarSiguiente();
+      return;
+    }
+    if (letra === ' ' && respetarEspacios) {
+      resultadoCifrado += ' ';
+      indexProceso++;
+      procesarSiguiente();
+      return;
+    }
+
+    const modo = document.getElementById("modoLetraClave").value;
+
+    if (clave.length === 1 && (modo === "clave-dinamica-derecha" || modo === "clave-dinamica-izquierda")) {
+      if (indexProceso > 0) {
+        claveDinamica = avanzarClave(claveDinamica, modo === "clave-dinamica-derecha" ? "derecha" : "izquierda");
+      }
+      claveGeneradaFinal += claveDinamica;
+
+      const indexClave = ruedaInterior.indexOf(claveDinamica);
+      const indexTexto = ruedaInterior.indexOf(letra);
+      const desplazamiento = (indexTexto - indexClave + ruedaInterior.length) % ruedaInterior.length;
+      const cifrada = ruedaExterior[desplazamiento];
+      resultadoCifrado += cifrada;
+
+      resaltadasInterior = [letra];
+      resaltadasExterior = [cifrada];
+      resaltadasClave = [claveDinamica];
+      document.getElementById("resultado").value = resultadoCifrado;
+      dibujarRuedas();
+
+      document.getElementById("btnSiguiente").style.display = "inline-block";
+      return;
+    }
+
+    const claveLetra = clave.length === 1 ? clave : claveExtendida[(indexProceso - (mensaje.slice(0, indexProceso).match(/ /g) || []).length)];
+    const indexClave = ruedaInterior.indexOf(claveLetra);
+    const letrasTotales = ruedaInterior.length;
+    const destino = ((letrasTotales - indexClave) * 360 / letrasTotales) % 360;
+
+    animarGiro(destino, () => {
+      const pos = ruedaInterior.indexOf(letra);
+      const nuevaPos = (pos + (letrasTotales - indexClave)) % letrasTotales;
+      const cifrada = ruedaExterior[nuevaPos];
+      resultadoCifrado += cifrada;
+      resaltadasInterior = [letra];
+      resaltadasExterior = [cifrada];
+      resaltadasClave = [claveLetra];
+      document.getElementById("resultado").value = resultadoCifrado;
+      dibujarRuedas();
+
+      document.getElementById("btnSiguiente").style.display = "inline-block";
+    });
+  }
+
+  function continuarProceso() {
+    document.getElementById("btnSiguiente").style.display = "none";
+    indexProceso++;
+    setTimeout(procesarSiguiente, 300);
+  }
+
+  function animarGiro(destino, callback) {
+    const paso = 2;
+    const sonido = document.getElementById("sonidoGiro");
+
+    if (Math.abs(anguloActual - destino) < paso) {
+      anguloActual = destino;
+      sonido.pause();
+      sonido.currentTime = 0;
+      dibujarRuedas();
+      setTimeout(callback, 100);
+      return;
+    }
+
+    anguloActual += (destino > anguloActual ? paso : -paso);
+    dibujarRuedas();
+
+    if (sonido.paused) {
+      try {
+        sonido.currentTime = 0;
+        sonido.play();
+      } catch (e) {
+        console.warn("Error al reproducir sonido:", e);
+      }
+    }
+
+    requestAnimationFrame(() => animarGiro(destino, callback));
+  }
+
+  function editarRuletas() {
+    document.getElementById("nuevaExterior").value = ruedaExterior;
+    document.getElementById("nuevaInterior").value = ruedaInterior;
+    document.getElementById("errorEdicion").innerText = "";
+    document.getElementById("modalEditar").style.display = "flex";
+  }
+
+  function cerrarModalEditar() {
+    document.getElementById("modalEditar").style.display = "none";
+  }
+
+  function guardarRuletas() {
+    const nuevaExterior = document.getElementById("nuevaExterior").value.toUpperCase();
+    const nuevaInterior = document.getElementById("nuevaInterior").value.toLowerCase();
+
+    if (!nuevaExterior || !nuevaInterior) {
+      document.getElementById("errorEdicion").innerText = "Ambas ruletas deben estar completas.";
+      return;
+    }
+    if (nuevaExterior.length !== nuevaInterior.length) {
+      document.getElementById("errorEdicion").innerText = "Las ruletas deben tener la misma longitud.";
+      return;
+    }
+    if (new Set(nuevaExterior).size !== nuevaExterior.length || new Set(nuevaInterior).size !== nuevaInterior.length) {
+      document.getElementById("errorEdicion").innerText = "Las ruletas no deben tener caracteres repetidos.";
+      return;
+    }
+
+    ruedaExterior = nuevaExterior;
+    ruedaInterior = nuevaInterior;
+    cerrarModalEditar();
+    reiniciar();
+  }
+
+  function reiniciarTodo() {
+    mensaje = "";
+    clave = "";
+    claveExtendida = "";
+    claveGeneradaFinal = "";
+    resultadoCifrado = "";
+    indexProceso = 0;
+    claveDinamica = "";
+    resaltadasExterior = [];
+    resaltadasInterior = [];
+    resaltadasClave = [];
+
+    document.getElementById("mensaje").value = "";
+    document.getElementById("clave").value = "";
+    document.getElementById("resultado").value = "";
+    document.getElementById("mensaje").disabled = false;
+    document.getElementById("clave").disabled = false;
+    document.getElementById("modoLetraClave").disabled = false;
+    document.getElementById("respetarEspacios").disabled = false;
+    document.getElementById("errorValidacion").innerText = "";
+    document.getElementById("infoEspacios").innerText = "";
+    document.getElementById("btnSiguiente").style.display = "none";
+    document.getElementById("btnNuevoCifrado").style.display = "none";
+    document.querySelector("button[onclick='confirmarCifrado()']").disabled = false;
+
+    document.getElementById("opcionesLetraClave").style.display = "none";
+    anguloActual = 0;
+    dibujarRuedas();
+  }
+
+  dibujarRuedas();
+</script>
+</body>
+</html>
